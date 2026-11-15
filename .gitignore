@@ -1,0 +1,9 @@
+# Local, non-redistributable assets (Blizzard font, exported icons). See README.
+assets-local/
+node_modules/
+# Local config (addon path etc.)
+emulator.config.local.json
+# Local tool state, not part of the project
+.claude/
+# Lua build intermediates (dist/ IS committed)
+lua51/build/

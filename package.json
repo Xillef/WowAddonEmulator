@@ -1,0 +1,12 @@
+{
+  "name": "wow-addon-emulator",
+  "private": true,
+  "description": "Runs a World of Warcraft addon's real Lua files in the browser against a fake WoW frame API.",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "headless": "node tools/headless.mjs",
+    "gen-wowapi": "node tools/gen-wowapi.mjs",
+    "build-lua": "powershell -ExecutionPolicy Bypass -File lua51/build.ps1"
+  }
+}

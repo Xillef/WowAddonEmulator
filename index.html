@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WoW Addon Emulator</title>
+<style>
+  /* Friz Quadrata: your own copy in assets-local/ wins, else the free look-alike (Marcellus). */
+  @font-face { font-family: EmuFriz; src: url(assets-local/fonts/FRIZQT__.TTF), url(assets/fonts/Marcellus-Regular.ttf); }
+  @font-face { font-family: EmuArialN; src: url(assets-local/fonts/ARIALN.TTF), local("Arial Narrow"), local("ArialNarrow"); }
+  @font-face { font-family: EmuMorpheus; src: url(assets-local/fonts/MORPHEUS.TTF), url(assets/fonts/Marcellus-Regular.ttf); }
+  @font-face { font-family: EmuSkurri; src: url(assets-local/fonts/SKURRI.TTF), url(assets/fonts/Marcellus-Regular.ttf); }
+
+  :root { --bg: #111317; --panel: #191c21; --line: #2a2e35; --text: #d8dade; --muted: #8a8f98; --err: #ff6b6b; --ok: #5fd38a; --accent: #e8c15a; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, sans-serif; }
+  body { display: flex; }
+  #stage { position: relative; flex: 1; min-width: 0; overflow: hidden; }
+  #screen, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #overlay { pointer-events: none; }
+  #side { width: 400px; max-width: 45vw; border-left: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; min-height: 0; }
+  #controls { padding: 8px 10px; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+  #controls label { display: flex; gap: 4px; align-items: center; color: var(--muted); }
+  select, button, input { background: #23272e; color: var(--text); border: 1px solid var(--line); border-radius: 4px; font: inherit; padding: 2px 6px; }
+  button { cursor: pointer; }
+  #zoom { display: flex; }
+  #zoom button { border-radius: 0; margin-left: -1px; }
+  #zoom button:first-child { border-radius: 4px 0 0 4px; margin-left: 0; }
+  #zoom button:last-child { border-radius: 0 4px 4px 0; }
+  #zoom-level { min-width: 4.5em; font-variant-numeric: tabular-nums; }
+  #status { padding: 6px 10px; color: var(--muted); border-bottom: 1px solid var(--line); font-size: 12px; }
+  #panels { flex: 1; overflow: auto; min-height: 0; }
+  details { border-bottom: 1px solid var(--line); }
+  summary { padding: 6px 10px; cursor: pointer; user-select: none; font-weight: 600; }
+  summary .count { font-weight: 400; color: var(--muted); }
+  summary .count.bad { color: var(--err); }
+  .list { padding: 0 10px 8px; }
+  .entry { border-top: 1px solid var(--line); padding: 4px 0; }
+  .entry pre { margin: 2px 0 0; white-space: pre-wrap; word-break: break-word; font: 11px/1.35 ui-monospace, Consolas, monospace; color: var(--muted); }
+  .entry .head { font: 12px/1.35 ui-monospace, Consolas, monospace; white-space: pre-wrap; word-break: break-word; }
+  .err .head { color: var(--err); }
+  .mono { font: 12px/1.35 ui-monospace, Consolas, monospace; white-space: pre-wrap; word-break: break-word; }
+  .times { color: var(--accent); margin-left: 6px; }
+  #inspect-info { padding: 6px 10px; border-bottom: 1px solid var(--line); min-height: 4.5em; }
+  #console { display: flex; border-top: 1px solid var(--line); }
+  #console input { flex: 1; border: 0; border-radius: 0; padding: 6px 10px; font: 12px ui-monospace, Consolas, monospace; }
+  .empty { color: var(--muted); padding: 2px 0 4px; }
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="screen"></canvas><canvas id="overlay"></canvas></div>
+<div id="side">
+  <div id="controls">
+    <label>Addon <select id="addon"></select></label>
+    <label>Scenario <select id="scenario"></select></label>
+    <label title="The emulated monitor">Screen <select id="res">
+      <option value="1920x1080">1920×1080</option><option value="2560x1440">2560×1440</option>
+      <option value="3840x2160">3840×2160</option><option value="1280x720">1280×720</option></select></label>
+    <label title="WoW's UI scale. Pixel perfect = 768 / screen height.">UI scale <select id="uiscale">
+      <option value="pp">pixel perfect</option><option>0.64</option><option>0.71</option><option>0.8</option>
+      <option>0.9</option><option>1</option><option>1.15</option></select></label>
+    <span id="zoom" title="Zoom: Ctrl+wheel or Alt+wheel at the cursor, Ctrl+plus/minus, Ctrl+0 fit, Ctrl+1 100%. Pan: Space+drag, Shift+drag or middle-drag.">
+      <button id="zoom-out" aria-label="Zoom out">−</button><button id="zoom-level" title="Back to 100%">100%</button><button id="zoom-in" aria-label="Zoom in">+</button><button id="zoom-fit">Fit</button></span>
+    <label><input type="checkbox" id="inspect"> Inspect</label>
+    <button id="reload" title="Like /reload: fresh Lua state, addon + scenario loaded again">Reload</button>
+  </div>
+  <div id="status">Loading…</div>
+  <div id="inspect-info" hidden></div>
+  <div id="panels">
+    <details id="errors-panel" open><summary>Lua errors <span class="count" id="errors-count">0</span></summary><div class="list" id="errors"></div></details>
+    <details id="stubs-panel"><summary>Not emulated (stub calls) <span class="count" id="stubs-count">0</span></summary><div class="list" id="stubs"></div></details>
+    <details id="secure-panel"><summary>Secure actions (not run) <span class="count" id="secure-count">0</span></summary><div class="list" id="secure"></div></details>
+    <details id="chat-panel" open><summary>Chat <span class="count" id="chat-count">0</span></summary><div class="list" id="chat"></div></details>
+  </div>
+  <div id="console"><input id="lua" placeholder="Lua (=expr to print), e.g. /pdc or =GetTime()" autocomplete="off" spellcheck="false"></div>
+</div>
+<script src="dist/lua51.js"></script>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
